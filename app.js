@@ -1,4 +1,4 @@
-import {resolveSelection,toggleMainBall,adjustDiscard} from './selection.js?v=4';
+import {resolveSelection,toggleMainBall,adjustDiscard,cardAvailability} from './selection.js?v=10';
 const $=s=>document.querySelector(s),names=['红球','蓝球','黑球','粉球','黄球','大师球'];
 const colors=['red','blue','black','pink','yellow','master'],deckNames=['初级','进阶','高级','稀有','传说'];
 const deckFiles=['tier-1','tier-2','tier-3','rare','legendary'];
@@ -133,7 +133,7 @@ function renderPlayer(index,id){
      el.append(b);});inv.append(el);});box.append(inv);
  const cap=document.createElement('div');cap.className='caption';cap.textContent=`手持 ${total(p.tokens)} / 10 · 已进化 ${p.tucked.length} · 已捕获 ${p.active.length} 张`;box.append(cap);
  const label=document.createElement('div');label.className='caption';label.textContent=`保留牌 ${p.reserved.length} / 3`;box.append(label);
- const reserve=document.createElement('div');reserve.className='mini-cards';p.reserved.forEach(r=>{if(cards[r.card])reserve.append(cardButton(r.card,'mini'));else{const t=document.createElement('span');t.className='mini';t.textContent='隐藏保留牌';reserve.append(t);}});box.append(reserve);
+ const reserve=document.createElement('div');reserve.className='mini-cards reserved-cards';p.reserved.forEach(r=>{if(cards[r.card]){const b=cardButton(r.card,'mini reserved-card');b.dataset.owner=index;b.style.setProperty('--reserved-color',['#da4d49','#437fce','#42454c','#df78aa','#d4aa23'][cards[r.card].bonus_color]);b.classList.toggle('double-bonus',cards[r.card].bonus_value===2);reserve.append(b);}else{const t=document.createElement('span');t.className='mini reserved-card hidden-reserve';t.textContent='隐藏保留牌';reserve.append(t);}});box.append(reserve);
 }
 function renderBoard(){
  if(boardState!==state){
@@ -148,7 +148,9 @@ function renderBoard(){
    renderPlayer(1,'#opponent');renderPlayer(0,'#human');boardState=state;
  }
  document.querySelectorAll('[data-card]').forEach(b=>{const c=Number(b.dataset.card);b.classList.toggle('selected',selectedCard===c);
-   b.classList.toggle('affordable',state.actions.some(a=>a.card===c&&a.kind===3));b.classList.toggle('evolvable',state.actions.some(a=>a.card===c&&a.kind===5));
+   const reserved=b.classList.contains('reserved-card'),eligible=b.classList.contains('card')||(reserved&&b.dataset.owner==='0');
+   const available=cardAvailability(eligible?state.actions:[],c,reserved?2:1);
+   b.classList.toggle('affordable',available.capture);b.classList.toggle('evolvable',available.evolve);
    b.classList.toggle('last-move',lastActor===1&&lastAction?.card===c);b.setAttribute('aria-pressed',String(selectedCard===c));});
 }
 function showSelection(a){

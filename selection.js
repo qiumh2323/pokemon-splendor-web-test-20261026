@@ -1,4 +1,5 @@
 // Selection resolution is deliberately pure so the exact UI path is regression tested.
+export function cardAvailability(actions,card,source){return {capture:actions.some(a=>a.card===card&&a.source===source&&a.kind===3),evolve:actions.some(a=>a.card===card&&a.source===source&&a.kind===5)};}
 export function resolveSelection(actions, pending, {card=null,deck=null,balls=[]}={}) {
  let visible;
  if(balls.some(Boolean))visible=actions.filter(a=>[0,1,4].includes(a.kind)&&a.tokens.every((n,i)=>n===balls[i]));
