@@ -108,7 +108,7 @@ function renderPlayer(index,id){
  const title=document.createElement('h3');title.innerHTML=`${index?'电脑':'你'} <span class="score">${p.score}<small> / 18分</small></span>`;box.append(title);
  const scorebar=document.createElement('progress');scorebar.className='score-progress';scorebar.max=18;scorebar.value=Math.min(18,p.score);scorebar.setAttribute('aria-label',`${index?'电脑':'你'}的得分进度`);box.append(scorebar);
  const inv=document.createElement('div');inv.className='inventory';
- names.forEach((name,c)=>{const el=document.createElement('div');el.className='owned-column';el.innerHTML=`<img src="${sprite(c)}" alt="${name}"><strong>${p.tokens[c]}</strong>${c<5?`<small>永久 ${bonus[c]}</small>`:'<small>大师球</small>'}`;
+ names.forEach((name,c)=>{const el=document.createElement('div');el.className='owned-column';el.innerHTML=`<img src="${sprite(c)}" alt="${name}"><strong>${p.tokens[c]}</strong>${c<5?`<small>永久 ${bonus[c]}</small>`:''}`;
    if(c<5)p.active.filter(n=>cards[n].bonus_color===c).forEach(n=>{const b=cardButton(n,'mini owned-card');b.style.setProperty('--owned-color',['#da4d49','#437fce','#42454c','#df78aa','#d4aa23'][c]);b.classList.toggle('double-bonus',cards[n].bonus_value===2);
      const evolution=document.createElement('span');evolution.className='evolution-cost';
      const targets=cards.filter(t=>t.identity===cards[n].evolves_to_identity);
