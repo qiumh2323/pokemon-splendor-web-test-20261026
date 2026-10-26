@@ -3,13 +3,30 @@ const $=s=>document.querySelector(s),names=['红球','蓝球','黑球','粉球',
 const colors=['red','blue','black','pink','yellow','master'],deckNames=['初级','进阶','高级','稀有','传说'];
 const deckFiles=['tier-1','tier-2','tier-3','rare','legendary'];
 let cards=[],state=null,boardState=null,busy=false,pending=null,selectedCard=null,selectedDeck=null;
-let chosenBalls=[0,0,0,0,0,0],requestId=0,log=[],gameSeed=0,activeDifficulty='simple';
+let chosenBalls=[0,0,0,0,0,0],requestId=0,log=[],gameSeed=0,activeDifficulty='simple',activeFirstOption='random',engineReady=false;
 let zoomTimer,touchTimer,touchOrigin,lastAction=null,lastActor=null,thinkTimer,thinkStart=0,searchProgress=null;
 const worker=new Worker('./worker.js?v=4',{type:'module'}),waiting=new Map(),ballViews=[];
 const glareProfiles={'pdf-t3-alakazam-01':'top-right','pdf-t2-haunter-01':'right','pdf-t1-charmander-01':'right','pdf-legendary-mewtwo':'top-right'};
 const sprite=c=>`assets/balls/ball-${colors[c]}.png`,art=c=>`assets/cards/${cards[c].id}.jpg`;
 const total=v=>v.reduce((a,b)=>a+b,0),countText=v=>v.map((n,i)=>n?`${names[i]}×${n}`:'').filter(Boolean).join('、')||'无需支付';
 const difficultyName=()=>({simple:'简单电脑',medium:'中等电脑',hard:'困难电脑'}[activeDifficulty]);
+const difficultyHelp={simple:'双方遵循正常信息范围，适合先熟悉规则与操作。',medium:'双方遵循正常信息范围，电脑会更充分地考虑未知牌的可能性。',hard:'公开信息模式：电脑可查看真实牌库与隐藏保留牌，你也可查看完整牌库顺序。'};
+function syncSetup(){
+ const selected=$('#difficulty').value;$('#difficulty-help').textContent=difficultyHelp[selected];
+ document.querySelectorAll('[data-difficulty]').forEach(b=>{const checked=b.dataset.difficulty===selected;b.setAttribute('aria-checked',String(checked));b.tabIndex=checked?0:-1;b.disabled=busy;});
+ $('#new').disabled=busy||!engineReady;$('#first').disabled=busy;$('#close-setup').disabled=busy;
+}
+function engineStatus(message,kind='loading'){
+ $('#load-state').textContent=message;$('#engine-indicator').className='engine-indicator '+kind;$('#retry-load').hidden=kind!=='error';
+ if(kind==='ready')$('#runtime').textContent='对局不会上传；高难度可能需要更长思考时间。';
+}
+function openSetup(){
+ if(busy)return;
+ if(!state){$('#lobby-settings').scrollIntoView({behavior:'smooth',block:'center'});$('#new').focus({preventScroll:true});return;}
+ $('#difficulty').value=activeDifficulty;$('#first').value=activeFirstOption;syncSetup();
+ $('#setup-title').textContent='开始新对局';$('#close-setup').hidden=false;$('#close-setup').textContent=state.terminal?'取消':'继续当前对局';$('#setup-warning').hidden=state.terminal;
+ $('#setup-dialog').append(document.querySelector('.settings'));$('#setup-dialog').showModal();
+}
 function showDeck(d,modal){
  hideZoom();const full=activeDifficulty==='hard'&&state.decks;
  const known=new Set(state.market.flat());state.players.forEach(p=>{p.active.forEach(c=>known.add(c));p.tucked.forEach(c=>known.add(c));p.reserved.forEach(r=>{if(cards[r.card])known.add(r.card);});});
@@ -25,13 +42,13 @@ function showDeck(d,modal){
 function toast(text){$('#toast').textContent=text;$('#toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').hidden=true,4000);}
 function send(req){return new Promise((resolve,reject)=>{req.id=++requestId;waiting.set(req.id,{resolve,reject});worker.postMessage(req);});}
 worker.onmessage=({data:m})=>{
- if(m.type==='ready'){cards=m.data.cards;$('#version').textContent=m.data.version;$('#new').disabled=false;$('#open-setup').disabled=false;$('#new').textContent='开始对战';$('#hint').textContent='本地AI已准备好，开始一场对战吧。';$('#load-state').textContent='本地AI已就绪';}
- if(m.type==='loading'){$('#hint').textContent=m.message;$('#load-state').textContent=m.message;}
+ if(m.type==='ready'){cards=m.data.cards;engineReady=true;$('#version').textContent=m.data.version;$('#open-setup').disabled=false;$('#new').textContent='开始对战 ↗';$('#hint').textContent='本地AI已准备好，开始一场对战吧。';engineStatus('对战引擎已就绪','ready');syncSetup();}
+ if(m.type==='loading'){$('#hint').textContent=m.message;engineStatus(m.message);}
  if(m.type==='search-progress'&&waiting.has(m.id)){searchProgress=m;updateThinking();}
  if(m.type==='result'){const task=waiting.get(m.id);waiting.delete(m.id);task?.resolve(m);}
- if(m.type==='error'){const task=waiting.get(m.id);waiting.delete(m.id);task?.reject(Error(m.message));if(!task){toast('加载失败：'+m.message);$('#load-state').textContent='加载失败：'+m.message;}}
+ if(m.type==='error'){const task=waiting.get(m.id);waiting.delete(m.id);task?.reject(Error(m.message));if(!task){toast('加载失败：'+m.message);engineStatus('引擎未能加载，请重试。','error');}}
 };
-worker.onerror=e=>{const error=Error('浏览器引擎错误：'+e.message);waiting.forEach(p=>p.reject(error));waiting.clear();toast(error.message);};
+worker.onerror=e=>{const error=Error('浏览器引擎错误：'+e.message);waiting.forEach(p=>p.reject(error));waiting.clear();toast(error.message);if(!state)engineStatus('引擎未能加载，请重试。','error');};
 function cardSurface(c){
  const surface=document.createElement('span');surface.className='card-surface';surface.dataset.glare=glareProfiles[cards[c].id]??'gentle';
  const image=document.createElement('img');image.src=art(c);image.alt=cards[c].name;image.draggable=false;surface.append(image);
@@ -154,11 +171,13 @@ function render(){
  if(!state)return;hideZoom();
  const terminal=state.terminal,human=state.current_player===0,phase=['主要行动','弃球','进化选择'][state.phase];
  document.body.classList.add('has-game');document.body.classList.toggle('ai-busy',busy&&!human);
+ $('#game-lobby').hidden=true;$('#game-board').hidden=false;
  $('#turn').textContent=terminal?'对局结束':`回合 ${state.turn_number+1} · ${human?'你':'电脑'} · ${phase}`;
  $('#thinking').hidden=!(busy&&!human);$('#new').disabled=busy;$('#open-setup').disabled=busy;
  $('#open-setup').textContent=terminal?'再来一局':'新对局';$('#difficulty-label').textContent=difficultyName();
  $('#new').textContent='开始新对局';$('#setup-warning').hidden=terminal;$('#clear').disabled=busy;
  $('#difficulty').disabled=busy;$('#first').disabled=busy;
+ syncSetup();
  renderBank();renderBoard();
  const resolved=(!busy&&human&&!terminal)?resolveSelection(state.actions,pending,{card:selectedCard,deck:selectedDeck,balls:chosenBalls}):{visible:[],pending:null};
  pending=resolved.pending;
@@ -194,12 +213,12 @@ async function aiTurns(){
  finally{clearInterval(thinkTimer);thinkStart=0;busy=false;render();}
 }
 $('#new').onclick=async()=>{
- if(busy)return;busy=true;$('#new').disabled=true;
- try{const nextDifficulty=$('#difficulty').value;gameSeed=crypto.getRandomValues(new Uint32Array(1))[0];
+ if(busy||!engineReady)return;busy=true;syncSetup();$('#new').textContent='正在布置棋盘…';
+ try{const nextDifficulty=$('#difficulty').value,nextFirstOption=$('#first').value;gameSeed=crypto.getRandomValues(new Uint32Array(1))[0];
    const first=$('#first').value==='random'?crypto.getRandomValues(new Uint32Array(1))[0]%2:Number($('#first').value);
-   const m=await send({op:'new',seed:gameSeed,starting_player:first,full:nextDifficulty==='hard'});state=m.result;activeDifficulty=nextDifficulty;
-   log=[];lastAction=null;lastActor=null;$('#history').replaceChildren();$('#setup-dialog').close();$('#hint').textContent='点选球，或选择一张卡牌。电脑回合仍可长按查看卡牌。';clearSelection();await aiTurns();
- }catch(e){busy=false;$('#new').disabled=false;toast(e.message);}
+   const m=await send({op:'new',seed:gameSeed,starting_player:first,full:nextDifficulty==='hard'});state=m.result;activeDifficulty=nextDifficulty;activeFirstOption=nextFirstOption;
+   log=[];lastAction=null;lastActor=null;$('#history').replaceChildren();if($('#setup-dialog').open)$('#setup-dialog').close();$('#hint').textContent='点选球，或选择一张卡牌。电脑回合仍可长按查看卡牌。';clearSelection();await aiTurns();
+ }catch(e){busy=false;syncSetup();$('#new').textContent=state?'开始新对局':'开始对战 ↗';toast(e.message);}
 };
 $('#clear').onclick=clearSelection;
 $('#confirm').onclick=async()=>{
@@ -207,9 +226,16 @@ $('#confirm').onclick=async()=>{
  try{const m=await send({op:'apply',action:a});state=m.result;addLog(0,a,0);busy=false;clearSelection();await aiTurns();}
  catch(e){busy=false;toast(e.message);render();}
 };
-$('#export').onclick=()=>{const blob=new Blob([JSON.stringify({schema:'pokemon-web-replay-v1',champion:'V32.9',seed:gameSeed,difficulty:activeDifficulty,actions:log},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`pokemon-web-${gameSeed}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-$('#open-setup').onclick=()=>$('#setup-dialog').showModal();$('#close-setup').onclick=()=>$('#setup-dialog').close();
+function exportReplay(){if(!state)return;const blob=new Blob([JSON.stringify({schema:'pokemon-web-replay-v1',champion:'V32.9',seed:gameSeed,difficulty:activeDifficulty,actions:log},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`pokemon-web-${gameSeed}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+$('#export').onclick=exportReplay;$('#export-before-leave').onclick=exportReplay;
+$('#open-setup').onclick=openSetup;$('#close-setup').onclick=()=>$('#setup-dialog').close();
+$('#setup-dialog').addEventListener('close',()=>{if(state){$('#difficulty').value=activeDifficulty;$('#first').value=activeFirstOption;syncSetup();}});
+$('#setup-dialog').addEventListener('click',e=>{const d=e.currentTarget;if(e.target===d&&!busy){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}});
+$('#setup-dialog').addEventListener('cancel',e=>{if(busy)e.preventDefault();});
+document.querySelectorAll('[data-difficulty]').forEach((b,i,all)=>{b.onclick=()=>{$('#difficulty').value=b.dataset.difficulty;syncSetup();};b.onkeydown=e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const next=all[(i+(['ArrowUp','ArrowLeft'].includes(e.key)?-1:1)+all.length)%all.length];next.click();next.focus();}};});
+$('#difficulty').onchange=syncSetup;$('#retry-load').onclick=()=>location.reload();
+document.querySelectorAll('.lab-home-link').forEach(a=>a.onclick=e=>{if(state&&!state.terminal){e.preventDefault();hideZoom();$('#leave-dialog').showModal();}});$('#stay-game').onclick=()=>$('#leave-dialog').close();
 $('#close-card').onclick=()=>$('#card-dialog').close();
 $('#card-dialog').addEventListener('close',()=>document.querySelectorAll('[data-suppress-click]').forEach(b=>delete b.dataset.suppressClick));
 document.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]'))return;if(e.key==='Escape')clearSelection();if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&!$('#confirm').disabled){e.preventDefault();$('#confirm').click();}});
-buildBank();$('#setup-dialog').showModal();
+$('#lobby-settings').append(document.querySelector('.settings'));buildBank();syncSetup();
