@@ -1,0 +1,22 @@
+/* Non-destructive display correction. Original scans and all printed information stay intact. */
+.brand>img,.ball-button img,.inventory img{image-rendering:auto;object-fit:contain}
+.brand>img{width:48px;height:48px}
+.ball-button img{width:59px;height:59px;margin-top:8px;filter:drop-shadow(0 4px 3px #243d2422)}
+.ball-button .count{z-index:1;background:#ffffffde;border-radius:12px;min-width:23px;padding:1px}
+.ball-button.selected img{transform:translateY(-2px);filter:drop-shadow(0 6px 4px #2e713d30)}
+.inventory img{width:30px;height:30px}
+.card-surface{position:relative;display:block;height:149px;aspect-ratio:600/950;max-width:100%;border-radius:5px;overflow:hidden;filter:drop-shadow(0 3px 3px #1925181e);isolation:isolate}
+.card-surface>img{display:block;width:100%;height:100%;object-fit:contain;border-radius:5px;filter:contrast(1.035) saturate(1.04)}
+.card-surface>.glare-correction{position:absolute;inset:0;pointer-events:none;filter:brightness(.95) contrast(1.15) saturate(1.10);opacity:.28;mask-image:radial-gradient(ellipse at 78% 48%,#000 0%,#000 15%,transparent 72%)}
+.card-surface[data-glare=right]>.glare-correction{opacity:.64;mask-image:radial-gradient(ellipse at 83% 50%,#000 0%,#000 18%,transparent 73%)}
+.card-surface[data-glare=top-right]>.glare-correction{opacity:.58;mask-image:radial-gradient(ellipse at 77% 22%,#000 0%,#000 12%,transparent 67%)}
+.original-scans .card-surface>img{filter:none}
+.original-scans .card-surface>.glare-correction{display:none}
+.settings .scan-toggle{display:flex;align-items:center;gap:5px;margin-top:13px;color:#64735c;font-size:11px}
+.scan-toggle input{accent-color:#37674e}
+#zoom .card-surface{height:min(76vh,820px);max-width:70vw;filter:none;border-radius:8px}
+#zoom .card-surface>img{width:100%;height:100%;max-width:none;max-height:none}
+@media(min-width:1500px){.card-surface{height:175px}}
+@media(max-width:1050px){.card-surface{height:124px}.ball-button img{width:48px;height:48px}}
+@media(max-width:760px){.card-surface{height:110px}.ball-button img{width:43px;height:43px}.inventory img{width:35px;height:35px}.tier:first-child{grid-template-columns:55px minmax(0,1fr) 55px minmax(0,1fr)!important}}
+@media(prefers-reduced-motion:reduce){.ball-button,.card{transition:none}.pulse-ball{animation:none}}
