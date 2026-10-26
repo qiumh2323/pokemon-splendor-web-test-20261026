@@ -1,8 +1,9 @@
-import createEngine from './engine.js';
+import createEngine from './engine.js?v=3';
 import {encode,tieRanks} from './encoder.js';
 import * as ort from './vendor/ort.wasm.min.mjs';
 let engine,data,session,ready;
-let cancelled=false;
+let currentRequestId=null;
+globalThis.onSearchProgress=(completed,total)=>postMessage({type:'search-progress',id:currentRequestId,completed,total});
 ort.env.wasm.numThreads=1;
 ort.env.wasm.wasmPaths=new URL('./vendor/',import.meta.url).href;
 globalThis.evaluateNative=async packet=>{
@@ -21,14 +22,16 @@ async function dispatch(req){
 async function initialize(){
  postMessage({type:'loading',message:'下载冠军与本地计算引擎…'});
  data=await fetch('./catalog.json').then(r=>r.json());
- engine=await createEngine();
+ postMessage({type:'loading',message:'正在准备本地搜索引擎…'});
+ engine=await createEngine({locateFile:name=>new URL(name+'?v=3',import.meta.url).href});
+ postMessage({type:'loading',message:'正在加载冠军模型，首次打开需要下载…'});
  session=await ort.InferenceSession.create('./champion.onnx',{executionProviders:['wasm'],graphOptimizationLevel:'all'});
  await dispatch({op:'init',data});
  postMessage({type:'ready',data:{version:data.version,cards:data.cards.map(({features,entity,...c})=>c)}});
 }
 ready=initialize();
 self.onmessage=async ({data:req})=>{
- try{await ready;const t=performance.now();const result=await dispatch(req);
+ try{await ready;currentRequestId=req.id;const t=performance.now();const result=await dispatch(req);
    postMessage({type:'result',id:req.id,result,elapsed:performance.now()-t});
  }catch(e){postMessage({type:'error',id:req.id,message:e.message});}
 };

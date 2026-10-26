@@ -15,3 +15,17 @@ export function resolveSelection(actions, pending, {card=null,deck=null,balls=[]
  }
  return {visible,pending};
 }
+
+export function toggleMainBall(current,color){
+ const next=current.slice();
+ if(next[color]){next[color]=0;return next;}
+ if(next.some(n=>n===2))next.fill(0);
+ if(next.filter(Boolean).length>=3)return null;
+ next[color]=1;return next;
+}
+
+export function adjustDiscard(current,color,delta,held,required){
+ const next=current.slice(),total=next.reduce((a,b)=>a+b,0);
+ if(delta>0&&(total>=required||next[color]>=held[color]))return next;
+ next[color]=Math.max(0,Math.min(held[color],next[color]+delta));return next;
+}
