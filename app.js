@@ -1,15 +1,27 @@
-import {resolveSelection,toggleMainBall,adjustDiscard} from './selection.js?v=3';
+import {resolveSelection,toggleMainBall,adjustDiscard} from './selection.js?v=4';
 const $=s=>document.querySelector(s),names=['红球','蓝球','黑球','粉球','黄球','大师球'];
 const colors=['red','blue','black','pink','yellow','master'],deckNames=['初级','进阶','高级','稀有','传说'];
 const deckFiles=['tier-1','tier-2','tier-3','rare','legendary'];
 let cards=[],state=null,boardState=null,busy=false,pending=null,selectedCard=null,selectedDeck=null;
 let chosenBalls=[0,0,0,0,0,0],requestId=0,log=[],gameSeed=0,activeDifficulty='simple';
 let zoomTimer,touchTimer,touchOrigin,lastAction=null,lastActor=null,thinkTimer,thinkStart=0,searchProgress=null;
-const worker=new Worker('./worker.js?v=3',{type:'module'}),waiting=new Map(),ballViews=[];
+const worker=new Worker('./worker.js?v=4',{type:'module'}),waiting=new Map(),ballViews=[];
 const glareProfiles={'pdf-t3-alakazam-01':'top-right','pdf-t2-haunter-01':'right','pdf-t1-charmander-01':'right','pdf-legendary-mewtwo':'top-right'};
 const sprite=c=>`assets/balls/ball-${colors[c]}.png`,art=c=>`assets/cards/${cards[c].id}.jpg`;
 const total=v=>v.reduce((a,b)=>a+b,0),countText=v=>v.map((n,i)=>n?`${names[i]}×${n}`:'').filter(Boolean).join('、')||'无需支付';
 const difficultyName=()=>({simple:'简单电脑',medium:'中等电脑',hard:'困难电脑'}[activeDifficulty]);
+function showDeck(d,modal){
+ hideZoom();const full=activeDifficulty==='hard'&&state.decks;
+ const known=new Set(state.market.flat());state.players.forEach(p=>{p.active.forEach(c=>known.add(c));p.tucked.forEach(c=>known.add(c));p.reserved.forEach(r=>{if(cards[r.card])known.add(r.card);});});
+ const remaining=full?[...state.decks[d]].reverse():cards.map((c,i)=>i).filter(i=>cards[i].deck===d&&!known.has(i));
+ const content=document.createElement('div');content.className='deck-preview';
+ const title=document.createElement('h3');title.textContent=`${deckNames[d]}牌库 · 剩余 ${state.deck_counts[d]} 张`;content.append(title);
+ const note=document.createElement('p');note.className='fine';note.textContent=(full?'实际顺序：从左到右、从上到下，第一张为牌库顶。':'以下为尚未公开的候选牌，不代表顺序；可能包含对手从牌库顶取得的隐藏保留牌。')+' 右键或长按牌库可打开完整列表。';content.append(note);
+ const grid=document.createElement('div');grid.className='deck-preview-grid';remaining.forEach((c,i)=>{const el=document.createElement('div');el.append(cardSurface(c));const caption=document.createElement('small');caption.textContent=(full?`${i+1} · `:'')+cards[c].name;el.append(caption);grid.append(el);});content.append(grid);
+ if(!remaining.length)grid.textContent='暂无剩余牌';
+ if(modal){$('#detail-title').textContent='牌库信息';$('#detail-art').replaceChildren(content);if(!$('#card-dialog').open)$('#card-dialog').showModal();}
+ else{$('#zoom').replaceChildren(content);$('#zoom').hidden=false;}
+}
 function toast(text){$('#toast').textContent=text;$('#toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').hidden=true,4000);}
 function send(req){return new Promise((resolve,reject)=>{req.id=++requestId;waiting.set(req.id,{resolve,reject});worker.postMessage(req);});}
 worker.onmessage=({data:m})=>{
@@ -91,24 +103,29 @@ function actionLabel(a){
  return a.kind===6?'跳过本回合进化':'无其他合法行动 · 让过';
 }
 function renderPlayer(index,id){
- const p=state.players[index],box=$(id),opened=box.querySelector('details')?.open??false,bonus=[0,0,0,0,0,0];
+ const p=state.players[index],box=$(id),bonus=[0,0,0,0,0];
  p.active.forEach(c=>bonus[cards[c].bonus_color]+=cards[c].bonus_value);box.replaceChildren();
  const title=document.createElement('h3');title.innerHTML=`${index?'电脑':'你'} <span class="score">${p.score}<small> / 18分</small></span>`;box.append(title);
  const scorebar=document.createElement('progress');scorebar.className='score-progress';scorebar.max=18;scorebar.value=Math.min(18,p.score);scorebar.setAttribute('aria-label',`${index?'电脑':'你'}的得分进度`);box.append(scorebar);
  const inv=document.createElement('div');inv.className='inventory';
- names.forEach((name,c)=>{const el=document.createElement('div');el.innerHTML=`<img src="${sprite(c)}" alt="${name}"><strong>${p.tokens[c]}</strong><small>永久 ${bonus[c]}</small>`;inv.append(el);});box.append(inv);
+ names.forEach((name,c)=>{const el=document.createElement('div');el.className='owned-column';el.innerHTML=`<img src="${sprite(c)}" alt="${name}"><strong>${p.tokens[c]}</strong>${c<5?`<small>永久 ${bonus[c]}</small>`:'<small>万能球</small>'}`;
+   if(c<5)p.active.filter(n=>cards[n].bonus_color===c).forEach(n=>{const b=cardButton(n,'mini owned-card');b.style.setProperty('--owned-color',['#da4d49','#437fce','#42454c','#df78aa','#d4aa23'][c]);b.classList.toggle('double-bonus',cards[n].bonus_value===2);
+     const evolution=document.createElement('span');evolution.className='evolution-cost';
+     const targets=cards.filter(t=>t.identity===cards[n].evolves_to_identity);
+     if(targets.length){const label=document.createElement('span');label.textContent='进化';evolution.append(label);cards[n].evolution_requirement.forEach((v,k)=>{if(v){const cost=document.createElement('span');cost.innerHTML=`<img src="${sprite(k)}" alt="${names[k]}">×${v}`;evolution.append(cost);}});}else evolution.textContent='—';
+     b.append(evolution);el.append(b);});inv.append(el);});box.append(inv);
  const cap=document.createElement('div');cap.className='caption';cap.textContent=`手持 ${total(p.tokens)} / 10 · 已进化 ${p.tucked.length}`;box.append(cap);
- const details=document.createElement('details');details.className='owned-cards';details.open=opened;
- const summary=document.createElement('summary');summary.textContent=`已捕获 ${p.active.length} 张 · 点击展开`;details.append(summary);
- const active=document.createElement('div');active.className='mini-cards';p.active.forEach(c=>active.append(cardButton(c,'mini')));details.append(active);box.append(details);
+ const summary=document.createElement('div');summary.className='caption';summary.textContent=`已捕获 ${p.active.length} 张 · 按永久球颜色排列`;box.append(summary);
  const label=document.createElement('div');label.className='caption';label.textContent=`保留牌 ${p.reserved.length} / 3`;box.append(label);
  const reserve=document.createElement('div');reserve.className='mini-cards';p.reserved.forEach(r=>{if(cards[r.card])reserve.append(cardButton(r.card,'mini'));else{const t=document.createElement('span');t.className='mini';t.textContent='隐藏保留牌';reserve.append(t);}});box.append(reserve);
 }
 function renderBoard(){
  if(boardState!==state){
    const market=$('#market');market.replaceChildren();
-   const deckButton=d=>{const b=document.createElement('button');b.className='deck';b.innerHTML=`<img src="assets/cards/back-${deckFiles[d]}.jpg" alt="${deckNames[d]}牌库"><span>余 ${state.deck_counts[d]}</span>`;
-     b.onclick=()=>{if(busy||state.terminal||state.current_player!==0)return;selectedDeck=selectedDeck===d?null:d;selectedCard=null;chosenBalls.fill(0);pending=null;render();};return b;};
+   const deckButton=d=>{const b=document.createElement('button');b.className='deck';b.innerHTML=`<span class="deck-surface"><img src="assets/cards/back-${deckFiles[d]}.jpg" alt="${deckNames[d]}牌库"></span><span>余 ${state.deck_counts[d]}</span>`;
+     b.title='悬浮查看牌库 · 长按打开';b.onmouseenter=()=>{if(matchMedia('(hover:hover)').matches)zoomTimer=setTimeout(()=>showDeck(d,false),550);};b.onmouseleave=hideZoom;b.onfocus=()=>{};
+     b.oncontextmenu=e=>{e.preventDefault();showDeck(d,true);};b.onpointerdown=e=>{if(e.pointerType==='touch')touchTimer=setTimeout(()=>{b.dataset.suppressClick='1';showDeck(d,true);},500);};b.onpointerup=b.onpointercancel=()=>clearTimeout(touchTimer);b.onpointermove=()=>clearTimeout(touchTimer);
+     b.onclick=()=>{if(b.dataset.suppressClick){delete b.dataset.suppressClick;return;}if(busy||state.terminal||state.current_player!==0)return;selectedDeck=selectedDeck===d?null:d;selectedCard=null;chosenBalls.fill(0);pending=null;render();};return b;};
    const premium=document.createElement('div');premium.className='tier premium';
    [3,4].forEach(d=>{premium.append(deckButton(d));if(state.market[d].length)state.market[d].forEach(c=>premium.append(cardButton(c)));else{const e=document.createElement('span');e.className='empty';e.textContent='空';premium.append(e);}});market.append(premium);
    [2,1,0].forEach(d=>{const row=document.createElement('div');row.className='tier';row.append(deckButton(d));state.market[d].forEach(c=>row.append(cardButton(c)));market.append(row);});
@@ -181,7 +198,8 @@ async function aiTurns(){
 $('#new').onclick=async()=>{
  if(busy)return;busy=true;$('#new').disabled=true;
  try{const nextDifficulty=$('#difficulty').value;gameSeed=crypto.getRandomValues(new Uint32Array(1))[0];
-   const m=await send({op:'new',seed:gameSeed,starting_player:Number($('#first').value)});state=m.result;activeDifficulty=nextDifficulty;
+   const first=$('#first').value==='random'?crypto.getRandomValues(new Uint32Array(1))[0]%2:Number($('#first').value);
+   const m=await send({op:'new',seed:gameSeed,starting_player:first,full:nextDifficulty==='hard'});state=m.result;activeDifficulty=nextDifficulty;
    log=[];lastAction=null;lastActor=null;$('#history').replaceChildren();$('#setup-dialog').close();$('#hint').textContent='点选球，或选择一张卡牌。电脑回合仍可长按查看卡牌。';clearSelection();await aiTurns();
  }catch(e){busy=false;$('#new').disabled=false;toast(e.message);}
 };
@@ -192,7 +210,6 @@ $('#confirm').onclick=async()=>{
  catch(e){busy=false;toast(e.message);render();}
 };
 $('#export').onclick=()=>{const blob=new Blob([JSON.stringify({schema:'pokemon-web-replay-v1',champion:'V32.9',seed:gameSeed,difficulty:activeDifficulty,actions:log},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`pokemon-web-${gameSeed}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-$('#scan-correction').onchange=e=>document.body.classList.toggle('original-scans',!e.target.checked);
 $('#open-setup').onclick=()=>$('#setup-dialog').showModal();$('#close-setup').onclick=()=>$('#setup-dialog').close();
 $('#close-card').onclick=()=>$('#card-dialog').close();
 $('#card-dialog').addEventListener('close',()=>document.querySelectorAll('[data-suppress-click]').forEach(b=>delete b.dataset.suppressClick));

@@ -1,4 +1,4 @@
-import createEngine from './engine.js?v=3';
+import createEngine from './engine.js?v=4';
 import {encode,tieRanks} from './encoder.js';
 import * as ort from './vendor/ort.wasm.min.mjs';
 let engine,data,session,ready;
@@ -23,7 +23,7 @@ async function initialize(){
  postMessage({type:'loading',message:'下载冠军与本地计算引擎…'});
  data=await fetch('./catalog.json').then(r=>r.json());
  postMessage({type:'loading',message:'正在准备本地搜索引擎…'});
- engine=await createEngine({locateFile:name=>new URL(name+'?v=3',import.meta.url).href});
+ engine=await createEngine({locateFile:name=>new URL(name+'?v=4',import.meta.url).href});
  postMessage({type:'loading',message:'正在加载冠军模型，首次打开需要下载…'});
  session=await ort.InferenceSession.create('./champion.onnx',{executionProviders:['wasm'],graphOptimizationLevel:'all'});
  await dispatch({op:'init',data});
