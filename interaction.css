@@ -1,0 +1,14 @@
+[hidden]{display:none!important}
+.game-controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+#difficulty-label{font-size:11px;color:#7c8d75}
+.subtle-button{border:1px solid #cfdcc9;border-radius:7px;background:transparent;color:#466a4d;padding:8px 11px;font-size:12px}
+.subtle-button:hover:not(:disabled){background:#e7efe2}
+#setup-dialog{border:1px solid #d0dfc8;border-radius:18px;padding:26px;width:min(390px,92vw);box-shadow:0 25px 100px #16352640;color:#213a35}
+#setup-dialog::backdrop{background:#162f2580;backdrop-filter:blur(4px)}
+#setup-title{font-size:21px}
+#setup-dialog .fine{line-height:1.7}
+.player-panel:empty{display:none}
+.decision{position:sticky;top:16px}
+#selection{padding:10px;background:#f3f7ef;border-radius:7px;min-height:50px}
+#confirm:not(:disabled){box-shadow:0 3px 12px #315f4925}
+@media(max-width:760px){.game-controls{max-width:50%;gap:5px}.game-controls .turn{font-size:10px;padding:6px}#difficulty-label{display:none}.subtle-button{font-size:11px;padding:6px 9px}.decision{position:static}}
