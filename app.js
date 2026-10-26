@@ -112,8 +112,8 @@ function renderPlayer(index,id){
    if(c<5)p.active.filter(n=>cards[n].bonus_color===c).forEach(n=>{const b=cardButton(n,'mini owned-card');b.style.setProperty('--owned-color',['#da4d49','#437fce','#42454c','#df78aa','#d4aa23'][c]);b.classList.toggle('double-bonus',cards[n].bonus_value===2);
      const evolution=document.createElement('span');evolution.className='evolution-cost';
      const targets=cards.filter(t=>t.identity===cards[n].evolves_to_identity);
-     if(targets.length){const label=document.createElement('span');label.textContent='进化';evolution.append(label);cards[n].evolution_requirement.forEach((v,k)=>{if(v){const cost=document.createElement('span');cost.innerHTML=`<img src="${sprite(k)}" alt="${names[k]}">×${v}`;evolution.append(cost);}});}else evolution.textContent='—';
-     b.append(evolution);el.append(b);});inv.append(el);});box.append(inv);
+     if(targets.length){cards[n].evolution_requirement.forEach((v,k)=>{if(v){const cost=document.createElement('span');cost.innerHTML=`<img src="${sprite(k)}" alt="${names[k]}">×${v}`;evolution.append(cost);}});b.append(evolution);}
+     el.append(b);});inv.append(el);});box.append(inv);
  const cap=document.createElement('div');cap.className='caption';cap.textContent=`手持 ${total(p.tokens)} / 10 · 已进化 ${p.tucked.length}`;box.append(cap);
  const summary=document.createElement('div');summary.className='caption';summary.textContent=`已捕获 ${p.active.length} 张 · 按永久球颜色排列`;box.append(summary);
  const label=document.createElement('div');label.className='caption';label.textContent=`保留牌 ${p.reserved.length} / 3`;box.append(label);
@@ -156,7 +156,6 @@ function render(){
  const terminal=state.terminal,human=state.current_player===0,phase=['主要行动','弃球','进化选择'][state.phase];
  document.body.classList.add('has-game');document.body.classList.toggle('ai-busy',busy&&!human);
  $('#turn').textContent=terminal?'对局结束':`回合 ${state.turn_number+1} · ${human?'你':'电脑'} · ${phase}`;
- $('#score-strip').textContent=`你 ${state.players[0].score} : ${state.players[1].score} 电脑`;
  $('#thinking').hidden=!(busy&&!human);$('#new').disabled=busy;$('#open-setup').disabled=busy;
  $('#open-setup').textContent=terminal?'再来一局':'新对局';$('#difficulty-label').textContent=difficultyName();
  $('#new').textContent='开始新对局';$('#setup-warning').hidden=terminal;$('#clear').disabled=busy;
@@ -173,7 +172,7 @@ function render(){
    b.onclick=()=>{pending=a;render();};options.append(b);});options.scrollTop=oldScroll;
  if(!busy&&!terminal&&!human){const retry=document.createElement('button');retry.className='action';retry.textContent='重试电脑行动';retry.onclick=aiTurns;options.append(retry);}
  if(terminal){const r=state.rewards[0];$('#selection').textContent=`${r>0?'你获胜了！':r<0?'电脑获胜。':'本局平局。'} 你 ${state.players[0].score} 分，电脑 ${state.players[1].score} 分。`;$('#hint').textContent='本回合所有行动已结算，对局结束。';}
- else if(busy&&!human)$('#selection').textContent='电脑正在你的设备上思考，你仍可查看卡牌。';
+ else if(busy&&!human)$('#selection').textContent='电脑正在思考，你仍可查看卡牌。';
  else if(pending)showSelection(pending);
  else if(state.phase===1)$('#selection').textContent=`请选择要弃掉的球：${total(chosenBalls)} / ${discardNeed()}。使用球下方的加减按钮调整。`;
  else if(chosenBalls.some(Boolean))$('#selection').textContent='继续选择不同颜色凑成合法组合，或使用“拿两个同色”。点已选球可取消。';
